@@ -1,0 +1,60 @@
+name: Weekly Report
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # 每周日午夜运行，您可以根据需要调整
+
+jobs:
+  generate-report:
+    runs-on: ubuntu-latest  # 运行在最新版本的Ubuntu上
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Set up Git
+      run: |
+        git config --global user.name 'lincyaw'
+        git config --global user.email '814750204@qq.com'
+
+    - name: Run Report Script
+      env:    
+        GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      run: |
+        REPOS=("https://x-access-token:${GH_TOKEN}@github.com/Lincyaw/testops.git" "https://x-access-token:${GH_TOKEN}@github.com/CUHK-SE-Group/generic-generator.git" "https://x-access-token:${GH_TOKEN}@github.com/CUHK-SE-Group/GDB-round2.git")
+        YOUR_NAME="lincyaw"
+        WORKING_DIR="${{ github.workspace }}/data"
+
+        mkdir -p $WORKING_DIR
+
+        for REPO_URL in "${REPOS[@]}"; do
+            REPO_NAME=$(basename -s .git "$REPO_URL")
+            git clone $REPO_URL $WORKING_DIR/$REPO_NAME
+            cd $WORKING_DIR/$REPO_NAME
+            ONE_WEEK_AGO_COMMIT=$(git rev-list -n 1 --before="1 week ago" HEAD)
+            OUTPUT_FILE="$WORKING_DIR/${REPO_NAME}_weekly_report.txt"
+            echo "================Repo: $REPO_NAME =================" > $OUTPUT_FILE
+            echo " " >> $OUTPUT_FILE
+            echo "Commit Messages:" >> $OUTPUT_FILE
+            git log --since="1 week ago" --author="$YOUR_NAME" >> $OUTPUT_FILE
+            echo " " >> $OUTPUT_FILE
+            echo "===================Code Diff===================" >> $OUTPUT_FILE
+            git diff $ONE_WEEK_AGO_COMMIT HEAD >> $OUTPUT_FILE
+            cd $WORKING_DIR
+        done
+
+    - name: Send Report Email
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: smtp.163.com
+        server_port: 465
+        username: ${{ secrets.EMAIL_USERNAME }}
+        password: ${{ secrets.EMAIL_PASSWORD }}
+        subject: Weekly Report
+        body: Here is your weekly report
+        to: ${{ secrets.EMAIL_RECEIVER }}
+        from: Github Action
+        attachments: >-
+          ${{ github.workspace }}/data/testops_weekly_report.txt,
+          ${{ github.workspace }}/data/generic-generator_weekly_report.txt,
+          ${{ github.workspace }}/data/GDB-round2_weekly_report.txt
